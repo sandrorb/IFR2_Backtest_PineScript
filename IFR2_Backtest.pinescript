@@ -1,12 +1,15 @@
 //Author: Sandro Roger Boschetti
 //Date: 2021-06-06 (1st version)
-//Date: 2021-07-20 (last update)
+//Date: 2021-07-21 (last update)
 //This is a script written in Pine Script for Tradingview website intended
 //for IFR2 backtesting. This code IS NOT FINISHED yet and may containg errors.
 
 //@version=4
 study("SrB - IFR2 Backtest", overlay=false)
 
+
+// Só porque pode-se definir aqui um tempo grande como 5 anos atrás significa
+// que havera market data para isso, principalmente em tempos gráficos menores
 defaultNumOfYears = 5
 totalNumYears = input(title="Number of Years", type=input.integer, defval=defaultNumOfYears)
 
@@ -24,6 +27,15 @@ var profit = 0.00
 var profitAccum = 0.00
 var factor = 1.0
 
+// Para pegar a variável tempo da 1a entrada para calcular juros compostos ao final
+var firstCandleFlag = false
+var tempoInicial = 0
+
+// Drawdown
+var factorMax = 1.0
+var ddmax = 0.0
+var dd = 0.0
+
 m_rsi = rsi(close, rsiPeriod)
 
 //Date to start off
@@ -35,6 +47,9 @@ if ((not bought) and (m_rsi < rsiValue) and timePeriod)
     bought := true
     buyPrice := close
     n := n + 1
+    if firstCandleFlag == false
+        firstCandleFlag := true
+        tempoInicial := time
 
 //Get the highet high of 2 bars from "[1]" the last but one. (Máxima dos dois candles sem contar o atual)
 hh = highest(2)[1]
@@ -47,6 +62,14 @@ if (bought and (high>=hh))
     bought := false
     buyPrice := 0.00
     timeElapsed := 0
+    if factor < factorMax
+        dd := 1 - factor / factorMax
+        if dd>ddmax
+            ddmax := dd
+    if factor > factorMax
+        factorMax := factor
+        ddmax := 0.0
+        dd := 0.0
 
 //Sell
 if (bought and (timeElapsed>=7))
@@ -56,15 +79,25 @@ if (bought and (timeElapsed>=7))
     bought := false
     buyPrice := 0.00
     timeElapsed := 0
+    if factor < factorMax
+        dd := 1 - factor / factorMax
+        if dd>ddmax
+            ddmax := dd
+    if factor > factorMax
+        factorMax := factor
+        ddmax := 0.0
+        dd := 0.0    
 
 if bought
     timeElapsed := timeElapsed + 1
 
-//Está errado!!!
-monthlyProfit = (pow(factor, 1.0/(totalNumYears * 12.0)) - 1.0) * 100.0
+
+tempoMeses = (((time - tempoInicial) / 1000.0) / 3600.0) / 24.0 / (365.25 / 12)
+monthlyProfit = (pow(factor, 1.0/(tempoMeses)) - 1.0) * 100.0
 
 //sem reaplicar os resultados
 plot(profitAccum, color=color.blue)
+//plot( (profitAccum + 100) / tempoMeses , color=color.blue)
 
 //reaplicando os resultados
 plot(factor, color=color.green)
@@ -72,10 +105,19 @@ plot(factor, color=color.green)
 //rentabilidade mensal em percentual
 plot(monthlyProfit, color=color.yellow)
 
+plot(dd*100, color=color.white)
+
+// profit e profitAccum são o lucro percentual em decimal sem considerar reaplicação dos lucros
+// profitAccum * 100 / n = o lucro percentual médio de cada período
+// factor é o lucro multiplicativo condiderando reaplicação dos lucros
+// (factor ^ (1/n) - 1) * 100 = lucro percentual médio de cada período
+// De um para o outro: (factor ^ (1/n) - 1) * n = profitAccum
+
 
 //Reminders:
 //label.new(0, high, tostring(high))
 //td = (timenow - timestamp(2016,06,06))  / (1000 * 60.0 * 60 * 24 * 365.25)
 //Tutorial on Pine Script: https://www.youtube.com/watch?v=VUxQwt5yXx0
 //A video on function: https://www.youtube.com/watch?v=x99E3ND-y_o
+
 
